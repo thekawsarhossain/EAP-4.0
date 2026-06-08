@@ -80,16 +80,17 @@ export function TaskForm({
 
   const onSubmit = async (data: TaskInput) => {
     try {
-      const payload = {
-        ...data,
-        assignedToId: data.assignedToId || undefined,
-        dueDate: data.dueDate || undefined,
+      const { projectId, ...rest } = data
+      const base = {
+        ...rest,
+        assignedToId: rest.assignedToId || undefined,
+        dueDate: rest.dueDate || undefined,
       }
       if (task) {
-        await updateTask({ id: task.id, body: payload }).unwrap()
+        await updateTask({ id: task.id, body: base }).unwrap()
         toastSuccess("Task updated")
       } else {
-        await createTask(payload).unwrap()
+        await createTask({ ...base, projectId }).unwrap()
         toastSuccess("Task created")
       }
       onSuccess()

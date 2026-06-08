@@ -43,6 +43,7 @@ export const baseApi = createApi({
     "Project",
     "Tasks",
     "Task",
+    "TaskStats",
     "Users",
     "Activity",
     "Notifications",

@@ -10,7 +10,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { toastError, toastSuccess } from "@/lib/toast"
-import { formatDate, formatFileSize, timeAgo } from "@/lib/utils"
+import { cn, formatDate, formatFileSize, timeAgo } from "@/lib/utils"
 import {
   useDeleteAttachmentMutation,
   useGetAttachmentsQuery,
@@ -21,13 +21,24 @@ import {
   useDeleteCommentMutation,
   useGetCommentsQuery,
 } from "@/store/api/comments-api"
+import { useHasPermission } from "@/hooks/use-has-permission"
 import { useGetTaskQuery } from "@/store/api/tasks-api"
-import type { Task } from "@/types"
-import { Spinner } from "@/components/ui/spinner"
+import type { Attachment, Task } from "@/types"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+} from "@/components/ui/dialog"
+import Image from "next/image"
+import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Calendar,
+  Download,
+  Eye,
+  File,
+  FileText,
+  Image as FileImage,
   MessageSquare,
   Paperclip,
   Trash2,
@@ -223,12 +234,45 @@ function CommentsSection({ taskId }: Readonly<{ taskId: string }>) {
   )
 }
 
+function attachmentIcon(mimeType: string | null) {
+  if (mimeType?.startsWith("image/")) return { Icon: FileImage, color: "text-blue-500" }
+  if (mimeType === "application/pdf") return { Icon: FileText, color: "text-red-500" }
+  if (mimeType?.startsWith("text/")) return { Icon: FileText, color: "text-muted-foreground" }
+  return { Icon: File, color: "text-muted-foreground" }
+}
+
+async function handleDownload(url: string, fileName: string) {
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = blobUrl
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(blobUrl)
+  } catch {
+    window.open(url, "_blank", "noopener,noreferrer")
+  }
+}
+
 function AttachmentsSection({ taskId }: Readonly<{ taskId: string }>) {
   const { data: attachments = [] } = useGetAttachmentsQuery(taskId)
+  const { data: task } = useGetTaskQuery(taskId)
+  const { data: session } = useSession()
+  const canManage = useHasPermission("ADMIN", "PROJECT_MANAGER")
+  const userId = (session?.user as { id?: string })?.id
   const [upload, { isLoading: uploading }] = useUploadAttachmentMutation()
-  const [deleteAttachment] = useDeleteAttachmentMutation()
+  const [deleteAttachment, { isLoading: isDeleting }] = useDeleteAttachmentMutation()
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const canDeleteAttachment =
+    canManage ||
+    (!!userId && (task?.createdById === userId || task?.assignedToId === userId))
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -255,6 +299,14 @@ function AttachmentsSection({ taskId }: Readonly<{ taskId: string }>) {
     }
   }
 
+  const handleView = (a: Attachment) => {
+    if (a.mimeType?.startsWith("image/")) {
+      setPreviewUrl(a.url)
+    } else {
+      window.open(a.url, "_blank", "noopener,noreferrer")
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -272,55 +324,86 @@ function AttachmentsSection({ taskId }: Readonly<{ taskId: string }>) {
           disabled={uploading}
           className="h-7 gap-1.5 text-xs"
         >
-          {uploading ? (
-            <Spinner className="h-3 w-3" />
-          ) : (
-            <Upload className="h-3 w-3" />
-          )}
+          {uploading ? <Spinner className="h-3 w-3" /> : <Upload className="h-3 w-3" />}
           {uploading ? "Uploading…" : "Upload"}
         </Button>
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          onChange={handleFile}
-        />
+        <input ref={fileRef} type="file" className="hidden" onChange={handleFile} />
       </div>
 
       <div className="space-y-2">
-        {attachments.map((a) => (
-          <div
-            key={a.id}
-            className="group flex items-center gap-2.5 rounded-lg border bg-muted/30 px-3 py-2"
-          >
-            <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <a
-                href={a.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="truncate text-sm font-medium hover:underline"
-              >
-                {a.fileName}
-              </a>
-              <p className="text-[11px] text-muted-foreground">
-                {formatFileSize(a.size)} · {formatDate(a.createdAt, "MMM d")}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setDeleteId(a.id)}
-              className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive"
+        {attachments.map((a) => {
+          const { Icon, color } = attachmentIcon(a.mimeType)
+          return (
+            <div
+              key={a.id}
+              className="flex items-center gap-2.5 rounded-lg border bg-muted/30 p-2.5"
             >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-card">
+                <Icon className={cn("h-4 w-4", color)} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium leading-snug">
+                  {a.fileName}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {formatFileSize(a.size)} · {formatDate(a.createdAt, "MMM d")}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleView(a)}
+                  title="Open"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleDownload(a.url, a.fileName)}
+                  title="Download"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                </Button>
+                {canDeleteAttachment && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDeleteId(a.id)}
+                    title="Delete"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          )
+        })}
         {attachments.length === 0 && (
           <p className="text-xs text-muted-foreground">No attachments yet.</p>
         )}
       </div>
+
+      <Dialog open={!!previewUrl} onOpenChange={(o) => !o && setPreviewUrl(null)}>
+        <DialogContent className="max-w-3xl p-2">
+          {previewUrl && (
+            <div className="relative max-h-[80vh] w-full overflow-hidden rounded">
+              <Image
+                src={previewUrl}
+                alt="Preview"
+                width={1200}
+                height={800}
+                className="h-auto max-h-[80vh] w-full object-contain"
+                unoptimized
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={!!deleteId}
@@ -329,6 +412,7 @@ function AttachmentsSection({ taskId }: Readonly<{ taskId: string }>) {
         description="This cannot be undone."
         confirmLabel="Remove"
         destructive
+        loading={isDeleting}
         onConfirm={handleDelete}
       />
     </div>

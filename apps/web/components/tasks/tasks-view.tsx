@@ -180,7 +180,7 @@ export function TasksView() {
         )}
 
         {canManage && (
-          <Button onClick={openCreate} size="sm" className="ml-auto">
+          <Button onClick={openCreate} className="ml-auto">
             <Plus className="h-3.5 w-3.5 sm:mr-1.5" />
             <span className="hidden sm:inline">New task</span>
           </Button>

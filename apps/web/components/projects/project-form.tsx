@@ -69,12 +69,13 @@ export function ProjectForm({
   }, [project, reset])
 
   const onSubmit = async (data: ProjectInput) => {
+    const body = { ...data, deadline: data.deadline || undefined }
     try {
       if (project) {
-        await updateProject({ id: project.id, body: data }).unwrap()
+        await updateProject({ id: project.id, body }).unwrap()
         toastSuccess("Project updated")
       } else {
-        await createProject(data).unwrap()
+        await createProject(body).unwrap()
         toastSuccess("Project created")
       }
       onSuccess()

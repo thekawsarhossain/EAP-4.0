@@ -9,6 +9,12 @@ type GetProjectsArgs = {
   sort?: string
 }
 
+const getActiveListQueries = (getState: () => unknown) =>
+  baseApi.util
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .selectInvalidatedBy(getState() as any, [{ type: "Projects" as const }])
+    .filter(({ endpointName }) => endpointName === "getProjects")
+
 export const projectsApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     getProjects: build.query<PaginatedResponse<Project>, GetProjectsArgs>({
@@ -21,7 +27,29 @@ export const projectsApi = baseApi.injectEndpoints({
     }),
     createProject: build.mutation<Project, Partial<Project>>({
       query: (body) => ({ url: "projects", method: "POST", body }),
-      invalidatesTags: ["Projects"],
+      invalidatesTags: [],
+      onQueryStarted: async (_body, { dispatch, queryFulfilled, getState }) => {
+        try {
+          const { data: newProject } = await queryFulfilled
+          getActiveListQueries(getState).forEach(({ originalArgs }) =>
+            dispatch(
+              projectsApi.util.updateQueryData(
+                "getProjects",
+                originalArgs as GetProjectsArgs,
+                (draft) => {
+                  const args = originalArgs as GetProjectsArgs
+                  if (!args.page || args.page === 1) {
+                    draft.items.unshift(newProject)
+                    draft.total += 1
+                  }
+                }
+              )
+            )
+          )
+        } catch {
+          // nothing to undo for a failed create
+        }
+      },
     }),
     updateProject: build.mutation<Project, { id: string; body: Partial<Project> }>({
       query: ({ id, body }) => ({
@@ -29,12 +57,25 @@ export const projectsApi = baseApi.injectEndpoints({
         method: "PATCH",
         body,
       }),
-      invalidatesTags: (_r, _e, { id }) => ["Projects", { type: "Project", id }],
-      onQueryStarted: async ({ id, body }, { dispatch, queryFulfilled }) => {
+      invalidatesTags: (_r, _e, { id }) => [{ type: "Project", id }],
+      onQueryStarted: async ({ id, body }, { dispatch, queryFulfilled, getState }) => {
+        const activeListQueries = getActiveListQueries(getState)
         const detailPatch = dispatch(
           projectsApi.util.updateQueryData("getProject", id, (draft) => {
             Object.assign(draft, body)
           })
+        )
+        const listPatches = activeListQueries.map(({ originalArgs }) =>
+          dispatch(
+            projectsApi.util.updateQueryData(
+              "getProjects",
+              originalArgs as GetProjectsArgs,
+              (draft) => {
+                const project = draft.items.find((p) => p.id === id)
+                if (project) Object.assign(project, body)
+              }
+            )
+          )
         )
         try {
           const { data } = await queryFulfilled
@@ -43,34 +84,43 @@ export const projectsApi = baseApi.injectEndpoints({
               Object.assign(draft, data)
             })
           )
-        } catch {
-          detailPatch.undo()
-        }
-      },
-    }),
-    deleteProject: build.mutation<void, string>({
-      query: (id) => ({ url: `projects/${id}`, method: "DELETE" }),
-      invalidatesTags: ["Projects"],
-      onQueryStarted: async (id, { dispatch, queryFulfilled, getState }) => {
-        const patches = baseApi.util
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .selectInvalidatedBy(getState() as any, [{ type: "Projects" as const }])
-          .filter(({ endpointName }) => endpointName === "getProjects")
-          .map(({ originalArgs }) =>
+          activeListQueries.forEach(({ originalArgs }) =>
             dispatch(
               projectsApi.util.updateQueryData(
                 "getProjects",
                 originalArgs as GetProjectsArgs,
                 (draft) => {
-                  const idx = draft.items.findIndex((p) => p.id === id)
-                  if (idx !== -1) {
-                    draft.items.splice(idx, 1)
-                    draft.total = Math.max(0, draft.total - 1)
-                  }
+                  const project = draft.items.find((p) => p.id === id)
+                  if (project) Object.assign(project, data)
                 }
               )
             )
           )
+        } catch {
+          detailPatch.undo()
+          listPatches.forEach((p) => p.undo())
+        }
+      },
+    }),
+    deleteProject: build.mutation<void, string>({
+      query: (id) => ({ url: `projects/${id}`, method: "DELETE" }),
+      invalidatesTags: [],
+      onQueryStarted: async (id, { dispatch, queryFulfilled, getState }) => {
+        const patches = getActiveListQueries(getState).map(({ originalArgs }) =>
+          dispatch(
+            projectsApi.util.updateQueryData(
+              "getProjects",
+              originalArgs as GetProjectsArgs,
+              (draft) => {
+                const idx = draft.items.findIndex((p) => p.id === id)
+                if (idx !== -1) {
+                  draft.items.splice(idx, 1)
+                  draft.total = Math.max(0, draft.total - 1)
+                }
+              }
+            )
+          )
+        )
         try {
           await queryFulfilled
         } catch {

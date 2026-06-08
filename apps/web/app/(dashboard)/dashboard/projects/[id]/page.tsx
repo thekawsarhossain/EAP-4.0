@@ -10,6 +10,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core"
 import { DroppableColumn } from "@/components/projects/droppable-column"
+import { ManageMembersDialog } from "@/components/projects/manage-members-dialog"
 import { ProjectStatusBadge } from "@/components/projects/project-status-badge"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { EmptyState } from "@/components/shared/empty-state"
@@ -44,6 +45,7 @@ interface PageUi {
   editTask: Task | undefined
   deleteId: string | null
   detailTaskId: string | null
+  membersOpen: boolean
 }
 
 const COLUMNS: { key: TaskStatus; label: string }[] = [
@@ -67,6 +69,7 @@ export default function ProjectDetailPage() {
     editTask: undefined,
     deleteId: null,
     detailTaskId: null,
+    membersOpen: false,
   })
   const [activeTask, setActiveTask] = useState<Task | null>(null)
   const [mobileTab, setMobileTab] = useState<TaskStatus>("TODO")
@@ -183,10 +186,19 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         {canManage && (
-          <Button size="sm" onClick={openCreate} className="shrink-0">
-            <Plus className="h-3.5 w-3.5 sm:mr-1.5" />
-            <span className="hidden sm:inline">Add task</span>
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setUi((prev) => ({ ...prev, membersOpen: true }))}
+            >
+              <Users className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Members</span>
+            </Button>
+            <Button onClick={openCreate}>
+              <Plus className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Add task</span>
+            </Button>
+          </div>
         )}
       </div>
 
@@ -322,6 +334,12 @@ export default function ProjectDetailPage() {
       <TaskDetailSheet
         taskId={ui.detailTaskId}
         onClose={() => setUi((prev) => ({ ...prev, detailTaskId: null }))}
+      />
+
+      <ManageMembersDialog
+        open={ui.membersOpen}
+        onOpenChange={(o) => setUi((prev) => ({ ...prev, membersOpen: o }))}
+        project={project}
       />
     </div>
   )
