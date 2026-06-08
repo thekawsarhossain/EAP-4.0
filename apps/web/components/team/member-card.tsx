@@ -1,6 +1,7 @@
 "use client"
 
 import { useGetUserWorkloadQuery } from "@/store/api/users-api"
+import { MemberCardStatsSkeleton } from "@/components/shared/skeletons"
 import type { User } from "@/types"
 
 const ROLE_LABEL: Record<string, string> = {
@@ -14,7 +15,8 @@ interface MemberCardProps {
 }
 
 export function MemberCard({ user }: Readonly<MemberCardProps>) {
-  const { data: workload } = useGetUserWorkloadQuery(user.id)
+  const { data: workload, isLoading: isWorkloadLoading } = useGetUserWorkloadQuery(user.id)
+
   const rate = workload?.total
     ? Math.round((workload.completed / workload.total) * 100)
     : 0
@@ -37,6 +39,7 @@ export function MemberCard({ user }: Readonly<MemberCardProps>) {
         </span>
       </div>
 
+      {isWorkloadLoading && <MemberCardStatsSkeleton />}
       {workload && (
         <div className="mt-3 space-y-2">
           <div className="flex justify-between text-xs text-muted-foreground">

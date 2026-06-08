@@ -2,6 +2,8 @@
 
 EAP is a full-stack project management and collaboration tool. It provides role-based access control, task status workflows, team collaboration features, and real-time activity tracking to help teams manage their workload.
 
+**Live:** [eap-red.vercel.app](https://eap-red.vercel.app) &nbsp;|&nbsp; **API:** [eap-production.up.railway.app](https://eap-production.up.railway.app) &nbsp;|&nbsp; **Source:** [github.com/thekawsarhossain/EAP-4.0](https://github.com/thekawsarhossain/EAP-4.0)
+
 ---
 
 ## Key Features
@@ -165,14 +167,14 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Deployment
 
-### Backend (Railway)
+### Backend (Railway) — [eap-production.up.railway.app](https://eap-production.up.railway.app)
 
 1. Create a new project in Railway.
 2. Select your repository and point to the `apps/api` folder.
 3. Add the environment variables defined in `apps/api/.env.example`.
 4. Copy the backend service URL for your frontend environment config.
 
-### Frontend (Vercel)
+### Frontend (Vercel) — [eap-red.vercel.app](https://eap-red.vercel.app)
 
 1. Import your repository to Vercel.
 2. Set the root directory to `apps/web`.
