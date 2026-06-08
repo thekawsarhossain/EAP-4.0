@@ -1,0 +1,5 @@
+import type { RootState } from "@/store"
+import { useSelector } from "react-redux"
+
+export const useAppSelector = <T>(selector: (state: RootState) => T) =>
+  useSelector(selector)
